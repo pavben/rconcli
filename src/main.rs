@@ -14,7 +14,7 @@ use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 #[command(author, version, about, long_about = None)]
 struct Args {
     /// YAML file containing the server list
-    #[arg(short, long, default_value = "servers.yaml")]
+    #[arg(short, long, default_value = "servers.yml")]
     file: PathBuf,
     
     /// ID prefix to search for

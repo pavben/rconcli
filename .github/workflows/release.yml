@@ -15,12 +15,29 @@ jobs:
     strategy:
       matrix:
         include:
+          # Linux
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             name: linux-x86_64
-          - os: macos-15
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            name: linux-arm64
+
+          # macOS
+          - os: macos-13
             target: x86_64-apple-darwin
             name: macos-x86_64
+          - os: macos-15
+            target: aarch64-apple-darwin
+            name: macos-arm64
+
+          # Windows
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            name: windows-x86_64
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            name: windows-arm64
 
     steps:
       - name: Checkout code
@@ -31,20 +48,46 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Install cross-compilation tools
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
       - name: Build binary
         run: cargo build --release --target ${{ matrix.target }}
+        env:
+          # For cross-compilation to ARM64 Linux
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
 
       - name: Package binary
         shell: bash
         run: |
           cd target/${{ matrix.target }}/release
-          tar czvf ../../../rconcli-${{ matrix.name }}.tar.gz rconcli
+
+          # Determine binary name based on OS
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            binary_name="rconcli.exe"
+          else
+            binary_name="rconcli"
+          fi
+
+          # Create archive based on OS
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            # Use zip for Windows
+            7z a ../../../rconcli-${{ matrix.name }}.zip $binary_name
+          else
+            # Use tar.gz for Unix-like systems
+            tar czvf ../../../rconcli-${{ matrix.name }}.tar.gz $binary_name
+          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: rconcli-${{ matrix.name }}
-          path: rconcli-${{ matrix.name }}.tar.gz
+          path: |
+            rconcli-${{ matrix.name }}.tar.gz
+            rconcli-${{ matrix.name }}.zip
 
   release:
     name: Create Release
@@ -59,7 +102,11 @@ jobs:
         with:
           files: |
             rconcli-linux-x86_64/rconcli-linux-x86_64.tar.gz
+            rconcli-linux-arm64/rconcli-linux-arm64.tar.gz
             rconcli-macos-x86_64/rconcli-macos-x86_64.tar.gz
+            rconcli-macos-arm64/rconcli-macos-arm64.tar.gz
+            rconcli-windows-x86_64/rconcli-windows-x86_64.zip
+            rconcli-windows-arm64/rconcli-windows-arm64.zip
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
           draft: false
